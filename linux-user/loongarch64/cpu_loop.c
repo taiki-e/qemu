@@ -10,6 +10,7 @@
 #include "user-internals.h"
 #include "user/cpu_loop.h"
 #include "signal-common.h"
+#include "semihosting/common-semi.h"
 
 /* Break codes */
 enum {
@@ -107,6 +108,10 @@ void cpu_loop(CPULoongArchState *env)
         case EXCCODE_ASXD:
             env->CSR_EUEN |= R_CSR_EUEN_ASXE_MASK;
             break;
+        case EXCCODE_SEMIHOST:
+            do_common_semihosting(cs);
+            set_pc(env, env->pc + 4);
+            break;
 
         case EXCP_ATOMIC:
             cpu_exec_step_atomic(cs);
@@ -122,6 +127,9 @@ void cpu_loop(CPULoongArchState *env)
 
 void target_cpu_copy_regs(CPUArchState *env, target_pt_regs *regs)
 {
+    CPUState *cpu = env_cpu(env);
+    TaskState *ts = get_task_state(cpu);
+    struct image_info *info = ts->info;
     int i;
 
     for (i = 0; i < 32; i++) {
@@ -129,4 +137,8 @@ void target_cpu_copy_regs(CPUArchState *env, target_pt_regs *regs)
     }
     env->pc = regs->csr.era;
 
+    ts->stack_base = info->start_stack;
+    ts->heap_base = info->brk;
+    /* This will be filled in on the first SYS_HEAPINFO call.  */
+    ts->heap_limit = 0;
 }
