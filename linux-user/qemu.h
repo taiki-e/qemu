@@ -104,7 +104,7 @@ struct TaskState {
     FPA11 fpa;
 # endif
 #endif
-#if defined(TARGET_ARM) || defined(TARGET_RISCV)
+#if defined(TARGET_ARM) || defined(TARGET_LOONGARCH) || defined(TARGET_RISCV)
     int swi_errno;
 #endif
 #if defined(TARGET_I386) && !defined(TARGET_X86_64)

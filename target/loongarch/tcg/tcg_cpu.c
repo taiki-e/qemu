@@ -16,6 +16,7 @@
 #include "exec/target_page.h"
 #include "tcg_loongarch.h"
 #include "internals.h"
+#include "semihosting/common-semi.h"
 
 struct TypeExcp {
     int32_t exccode;
@@ -43,6 +44,7 @@ static const struct TypeExcp excp_names[] = {
     {EXCCODE_BCE, "Bound Check Exception"},
     {EXCCODE_SXD, "128 bit vector instructions Disable exception"},
     {EXCCODE_ASXD, "256 bit vector instructions Disable exception"},
+    {EXCCODE_SEMIHOST, "Semihosting"},
     {EXCP_HLT, "EXCP_HLT"},
 };
 
@@ -93,6 +95,10 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     }
 
     switch (cs->exception_index) {
+    case EXCCODE_SEMIHOST:
+        do_common_semihosting(cs);
+        set_pc(env, env->pc + 4);
+        return;
     case EXCCODE_DBP:
         env->CSR_DBG = FIELD_DP64(env->CSR_DBG, CSR_DBG, DCL, 1);
         env->CSR_DBG = FIELD_DP64(env->CSR_DBG, CSR_DBG, ECODE, 0xC);

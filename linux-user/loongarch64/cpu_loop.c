@@ -10,6 +10,7 @@
 #include "user-internals.h"
 #include "user/cpu_loop.h"
 #include "signal-common.h"
+#include "semihosting/common-semi.h"
 
 /* Break codes */
 enum {
@@ -106,6 +107,10 @@ void cpu_loop(CPULoongArchState *env)
             break;
         case EXCCODE_ASXD:
             env->CSR_EUEN |= R_CSR_EUEN_ASXE_MASK;
+            break;
+        case EXCCODE_SEMIHOST:
+            do_common_semihosting(cs);
+            set_pc(env, env->pc + 4);
             break;
 
         case EXCP_ATOMIC:

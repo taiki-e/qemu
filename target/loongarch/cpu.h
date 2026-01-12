@@ -96,6 +96,9 @@ FIELD(FCSR0, CAUSE, 24, 5)
 #define  EXCCODE_BTE                 EXCODE(21, 0)
 #define  EXCCODE_DBP                 EXCODE(26, 0) /* Reserved subcode used for debug */
 
+/* QEMU Internal Exceptions */
+#define  EXCCODE_SEMIHOST            EXCODE(63, 0)
+
 /* cpucfg[0] bits */
 FIELD(CPUCFG0, PRID, 0, 32)
 

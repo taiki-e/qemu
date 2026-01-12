@@ -18,6 +18,7 @@
 #include "qemu/qemu-print.h"
 #include "fpu/softfloat.h"
 #include "tcg_loongarch.h"
+#include "semihosting/semihost.h"
 #include "translate.h"
 #include "internals.h"
 #include "vec.h"
