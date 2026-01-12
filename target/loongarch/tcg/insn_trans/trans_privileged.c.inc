@@ -7,6 +7,28 @@
 
 #include "csr.h"
 
+static bool check_plv(DisasContext *ctx)
+{
+    if (ctx->plv == MMU_PLV_USER) {
+        generate_exception(ctx, EXCCODE_IPE);
+        return true;
+    }
+    return false;
+}
+
+static bool trans_dbcl(DisasContext *ctx, arg_dbcl *a)
+{
+    if (semihosting_enabled(ctx->plv == MMU_PLV_USER) && a->imm == 0xab) {
+        generate_exception(ctx, EXCCODE_SEMIHOST);
+        return true;
+    }
+    if (check_plv(ctx)) {
+        return false;
+    }
+    generate_exception(ctx, EXCCODE_DBP);
+    return true;
+}
+
 #ifdef CONFIG_USER_ONLY
 
 #define GEN_FALSE_TRANS(name)   \
@@ -37,22 +59,12 @@ GEN_FALSE_TRANS(cacop)
 GEN_FALSE_TRANS(ldpte)
 GEN_FALSE_TRANS(lddir)
 GEN_FALSE_TRANS(ertn)
-GEN_FALSE_TRANS(dbcl)
 GEN_FALSE_TRANS(idle)
 
 #else
 
 typedef void (*GenCSRRead)(TCGv dest, TCGv_ptr env);
 typedef void (*GenCSRWrite)(TCGv dest, TCGv_ptr env, TCGv src);
-
-static bool check_plv(DisasContext *ctx)
-{
-    if (ctx->plv == MMU_PLV_USER) {
-        generate_exception(ctx, EXCCODE_IPE);
-        return true;
-    }
-    return false;
-}
 
 static bool set_csr_trans_func(unsigned int csr_num, GenCSRRead readfn,
                                GenCSRWrite writefn)
@@ -390,15 +402,6 @@ static bool trans_ertn(DisasContext *ctx, arg_ertn *a)
     }
     gen_helper_ertn(tcg_env);
     ctx->base.is_jmp = DISAS_EXIT;
-    return true;
-}
-
-static bool trans_dbcl(DisasContext *ctx, arg_dbcl *a)
-{
-    if (check_plv(ctx)) {
-        return false;
-    }
-    generate_exception(ctx, EXCCODE_DBP);
     return true;
 }
 
