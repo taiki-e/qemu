@@ -1264,17 +1264,25 @@ int kvm_arch_msi_data_to_gsi(uint32_t data)
 
 int kvm_arch_get_default_type(MachineState *machine)
 {
-#if defined(KVM_CAP_MIPS_VZ)
+#if defined(KVM_CAP_MIPS_VZ) || defined(KVM_CAP_MIPS_TE)
     int r;
     KVMState *s = KVM_STATE(machine->accelerator);
+#endif
 
+#if defined(KVM_CAP_MIPS_VZ)
     r = kvm_check_extension(s, KVM_CAP_MIPS_VZ);
     if (r > 0) {
         return KVM_VM_MIPS_VZ;
     }
 #endif
 
-    error_report("KVM_VM_MIPS_VZ type is not available");
+#if defined(KVM_CAP_MIPS_TE)
+    r = kvm_check_extension(s, KVM_CAP_MIPS_TE);
+    if (r > 0) {
+        return KVM_VM_MIPS_TE;
+    }
+#endif
+
     return -1;
 }
 
