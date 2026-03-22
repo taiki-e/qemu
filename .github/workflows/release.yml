@@ -1,0 +1,171 @@
+name: Release
+
+# To release:
+#
+# tag=loongarch-semi-10.1.3
+# git tag -f "${tag:?}"
+# git push origin -f refs/heads/"${tag:?}"
+# git push origin -f refs/tags/"${tag:?}"
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags:
+      - loongarch-semi-[0-9]+.[0-9]+.[0-9]+
+      - loongarch-semi-[0-9]+.[0-9]+.[0-9]+-rc[0-9]+
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -CeEuxo pipefail {0}
+
+jobs:
+  release:
+    if: github.repository_owner == 'taiki-e'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          prefix: loongarch-semi
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    if: github.repository_owner == 'taiki-e'
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-latest
+          # - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - run: |
+          retry() {
+            for i in {1..10}; do
+              if "$@"; then
+                return 0
+              else
+                sleep "${i}"
+              fi
+            done
+            "$@"
+          }
+          retry sudo apt-get -o Acquire::Retries=10 -qq update
+          retry sudo apt-get -o Acquire::Retries=10 -o Dpkg::Use-Pty=0 install -y --no-install-recommends \
+            libglib2.0-dev \
+            libpixman-1-dev \
+            libslirp-dev \
+            python3-pip
+        if: startsWith(matrix.os, 'ubuntu')
+      - run: |
+          case "$(uname -s)" in
+            Linux)
+              CFLAGS='-Wno-error=stringop-overflow'
+              CXXFLAGS='-Wno-error=stringop-overflow'
+              ;;
+            Darwin)
+              nproc() { sysctl machdep.cpu.core_count | cut -d' ' -f2; }
+              ;;
+            MINGW* | MSYS* | CYGWIN* | Windows_NT)
+              ;;
+          esac
+
+          export LDFLAGS="-s ${LDFLAGS:-}"
+
+          export CFLAGS="-g0 -O2 -fPIC -Wno-error=type-limits ${CFLAGS:-}"
+          export CXXFLAGS="-g0 -O2 -fPIC -Wno-error=type-limits ${CXXFLAGS:-}"
+
+          prefix="${HOME}/qemu"
+
+          mkdir -p -- "${prefix}"
+          set +C
+          ./configure --help
+          case "$(uname -s)" in
+            Linux)
+              args=(--target-list="loongarch64-linux-user,loongarch64-softmmu")
+              args+=(--disable-bsd-user)
+              ;;
+            *)
+              args=(--target-list="loongarch64-softmmu")
+              args+=(--disable-user)
+              ;;
+          esac
+          # Refs: https://github.com/cross-platform-actions/resources/blob/v0.12.0/ci.rb
+          args+=(
+            --disable-auth-pam
+            --disable-bochs
+            --disable-capstone
+            --disable-cfi-debug
+            --disable-curses
+            --disable-debug-info
+            --disable-debug-mutex
+            --disable-dmg
+            --disable-docs
+            --disable-gcrypt
+            --disable-gnutls
+            --disable-gtk
+            --disable-guest-agent
+            --disable-guest-agent-msi
+            --disable-libiscsi
+            --disable-libssh
+            --disable-libusb
+            --disable-lzo
+            --disable-nettle
+            --disable-parallels
+            --disable-png
+            --disable-qcow1
+            --disable-qed
+            --disable-replication
+            --disable-sdl
+            --disable-sdl-image
+            --disable-smartcard
+            --disable-snappy
+            --disable-usb-redir
+            --disable-vde
+            --disable-vdi
+            --disable-vvfat
+            --disable-xen
+            --disable-zstd
+            --enable-lto
+            --enable-slirp
+            --enable-tools
+            --prefix="${prefix}"
+          )
+          ./configure "${args[@]}" &>build.log || (tail <build.log -5000 && exit 1)
+          make -j"$(nproc)" &>build.log || (tail <build.log -5000 && exit 1)
+          make -p "${prefix}" &>build.log || (tail <build.log -5000 && exit 1)
+          make install &>build.log || (tail <build.log -5000 && exit 1)
+
+          mkdir -p -- "${prefix}"/share/doc/qemu
+          cp -- ./COPYING* ./LICENSE* "${prefix}"/share/doc/qemu
+
+          wd=$(pwd)
+          cd "${prefix}"/..
+          tar acvf "${wd}"/qemu-"${{ matrix.os }}".tar.xz qemu
+      - run: |
+          retry() {
+            for i in {1..10}; do
+              if "$@"; then
+                return 0
+              else
+                sleep "${i}"
+              fi
+            done
+            "$@"
+          }
+          tag="${GITHUB_REF#refs/tags/}"
+          retry gh release upload "${tag}" qemu-"${{ matrix.os }}".tar.xz --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
