@@ -73,6 +73,8 @@ jobs:
             python3-pip
         if: startsWith(matrix.os, 'ubuntu')
       - run: |
+          rm -rf -- /c/hostedtoolcache/windows/Python
+          C:/msys64/usr/bin/pacman -S --noconfirm python3-pip
           printf '%s\n' 'C:\msys64\mingw32\bin' >>"${GITHUB_PATH}"
           printf '%s\n' 'C:\msys64\usr\bin' >>"${GITHUB_PATH}"
         if: startsWith(matrix.os, 'windows')
