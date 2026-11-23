@@ -434,7 +434,10 @@ endif
 
 qemu_common_flags = qemu_isa_flags + qemu_common_flags
 
-if get_option('prefer_static')
+# Darwin has no static libSystem. Prefer static dependencies there without
+# requesting a fully static executable unless configure was passed --static.
+static_build = get_option('prefer_static') and (host_os != 'darwin' or 'CONFIG_STATIC' in config_host)
+if static_build
   qemu_ldflags += get_option('b_pie') ? '-static-pie' : '-static'
 endif
 
@@ -1157,7 +1160,8 @@ if not get_option('pixman').auto() or have_system or have_tools
                       method: 'pkg-config')
 endif
 
-zlib = dependency('zlib', required: true)
+# The macOS SDK provides zlib as a system dylib.
+zlib = dependency('zlib', required: true, static: static_build)
 
 libaio = not_found
 if not get_option('linux_aio').auto() or have_block
@@ -1750,7 +1754,7 @@ if get_option('oss').allowed() and have_system
   endif
 endif
 dsound = not_found
-if not get_option('dsound').auto() or (host_os == 'windows' and have_system)
+if get_option('dsound').disable_auto_if(host_os != 'windows' or not have_system).allowed()
   if cc.has_header('dsound.h')
     dsound = declare_dependency(link_args: ['-lole32', '-ldxguid'])
   endif
@@ -4777,7 +4781,7 @@ endif
 summary_info += {'QEMU_LDFLAGS':      ' '.join(qemu_ldflags)}
 summary_info += {'link-time optimization (LTO)': get_option('b_lto')}
 summary_info += {'PIE':               get_option('b_pie')}
-summary_info += {'static build':      get_option('prefer_static')}
+summary_info += {'static build':      static_build}
 summary_info += {'malloc trim support': has_malloc_trim}
 summary_info += {'membarrier':        have_membarrier}
 summary_info += {'debug graph lock':  get_option('debug_graph_lock')}
