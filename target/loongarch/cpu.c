@@ -863,6 +863,7 @@ static const struct {
     {EXCCODE_BCE, "Bound Check Exception"},
     {EXCCODE_SXD, "128 bit vector instructions Disable exception"},
     {EXCCODE_ASXD, "256 bit vector instructions Disable exception"},
+    {EXCCODE_SEMIHOST, "Semihosting"},
     {EXCP_HLT, "EXCP_HLT"},
 };
 

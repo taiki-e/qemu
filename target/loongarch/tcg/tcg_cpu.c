@@ -17,6 +17,7 @@
 #include "tcg/debug-assert.h"
 #include "tcg_loongarch.h"
 #include "internals.h"
+#include "semihosting/common-semi.h"
 
 void G_NORETURN do_raise_exception(CPULoongArchState *env,
                                    uint32_t exception,
@@ -54,6 +55,10 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     }
 
     switch (cs->exception_index) {
+    case EXCCODE_SEMIHOST:
+        do_common_semihosting(cs);
+        set_pc(env, env->pc + 4);
+        return;
     case EXCCODE_DBP:
         sys->CSR_DBG = FIELD_DP64(sys->CSR_DBG, CSR_DBG, DCL, 1);
         sys->CSR_DBG = FIELD_DP64(sys->CSR_DBG, CSR_DBG, ECODE, 0xC);
