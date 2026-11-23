@@ -133,12 +133,14 @@ void print_termios(void *arg);
 void print_termios2(void *arg);
 #endif
 
-/* ARM EABI and MIPS expect 64bit types aligned even on pairs or registers */
+/* ARM EABI, AArch64 ILP32 and MIPS align 64-bit arguments to register pairs. */
 #if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
 static inline int regpairs_aligned(CPUArchState *cpu_env, int num)
 {
     return cpu_env->eabi;
 }
+#elif defined(TARGET_AARCH64) && defined(TARGET_ABI32)
+static inline int regpairs_aligned(CPUArchState *cpu_env, int num) { return 1; }
 #elif defined(TARGET_MIPS) && defined(TARGET_ABI_MIPSO32)
 static inline int regpairs_aligned(CPUArchState *cpu_env, int num) { return 1; }
 #elif defined(TARGET_PPC) && !defined(TARGET_PPC64)

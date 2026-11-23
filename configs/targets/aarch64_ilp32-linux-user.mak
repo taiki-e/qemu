@@ -1,0 +1,10 @@
+TARGET_ARCH=aarch64
+TARGET_BASE_ARCH=arm
+TARGET_XML_FILES= aarch64-core.xml aarch64-fpu.xml aarch64-pauth.xml aarch64-mte.xml aarch64-sme2.xml
+TARGET_HAS_BFLT=y
+CONFIG_SEMIHOSTING=y
+CONFIG_ARM_COMPATIBLE_SEMIHOSTING=y
+TARGET_SYSTBL_ABI=common,32,time32,stat64,renameat,rlimit,memfd_secret
+TARGET_SYSTBL=syscall_64.tbl
+TARGET_LONG_BITS=64
+TARGET_ABI32=y

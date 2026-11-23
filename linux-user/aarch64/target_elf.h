@@ -27,10 +27,13 @@ typedef struct target_elf_gregset_t {
     struct target_user_pt_regs pt;
 } target_elf_gregset_t;
 
-#if TARGET_BIG_ENDIAN
-# define VDSO_HEADER            "vdso-be.c.inc"
-#else
-# define VDSO_HEADER            "vdso-le.c.inc"
+/* AArch64 ILP32 uses the signal trampoline instead of the LP64 vDSO. */
+#ifndef TARGET_ABI32
+# if TARGET_BIG_ENDIAN
+#  define VDSO_HEADER           "vdso-be.c.inc"
+# else
+#  define VDSO_HEADER           "vdso-le.c.inc"
+# endif
 #endif
 
 #endif
