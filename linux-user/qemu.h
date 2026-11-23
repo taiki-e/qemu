@@ -90,7 +90,7 @@ struct vm86_saved_state {
 };
 #endif
 
-#if defined(TARGET_ARM) && defined(TARGET_ABI32)
+#if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
 /* FPU emulator */
 #include "nwfpe/fpa11.h"
 #endif
@@ -102,11 +102,9 @@ struct emulated_sigtable {
 
 struct TaskState {
     pid_t ts_tid;     /* tid (or pid) of this task */
-#ifdef TARGET_ARM
-# ifdef TARGET_ABI32
+#if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
     /* FPA state */
     FPA11 fpa;
-# endif
 #endif
 #if defined(TARGET_ARM) || defined(TARGET_LOONGARCH) || defined(TARGET_RISCV)
     int swi_errno;
