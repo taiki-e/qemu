@@ -4,6 +4,8 @@ loongarch_ss = ss.source_set()
 loongarch_ss.add(files(
   'cpu.c',
 ))
+loongarch_ss.add(when: 'CONFIG_ARM_COMPATIBLE_SEMIHOSTING',
+                 if_true: files('common-semi-target.c'))
 
 loongarch_user_ss = ss.source_set()
 loongarch_user_ss.add(files('gdbstub.c'))

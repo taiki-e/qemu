@@ -17,6 +17,7 @@
 #include "exec/log.h"
 #include "qemu/qemu-print.h"
 #include "fpu/softfloat.h"
+#include "semihosting/semihost.h"
 #include "tcg_loongarch.h"
 #include "translate.h"
 #include "internals.h"
