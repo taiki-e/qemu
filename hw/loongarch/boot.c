@@ -35,79 +35,89 @@ struct loongarch_linux_hdr {
     uint32_t pe_header_offset;
 } QEMU_PACKED;
 
-static const unsigned int aux_boot_code[] = {
-                  /* Configure reset ebase.                    */
-    0x0400302c,   /* csrwr      $t0, LOONGARCH_CSR_EENTRY      */
+static void init_aux_boot_code(void *buf, bool la64,
+                               const struct loongarch_boot_info *info,
+                               uint64_t kernel_addr)
+{
+    /* ld.{d,w} rd, $t1, 40, with rd filled in below. */
+    const uint32_t load_arg = la64 ? 0x28c0a1a0 : 0x2880a1a0;
+    const uint32_t code[] = {
+                      /* Configure reset ebase.                    */
+        0x0400302c,   /* csrwr      $t0, LOONGARCH_CSR_EENTRY      */
 
-                  /* Disable interrupt.                        */
-    0x0380100c,   /* ori        $t0, $zero,0x4                 */
-    0x04000180,   /* csrxchg    $zero, $t0, LOONGARCH_CSR_CRMD */
-    0x03400000,   /* nop                                       */
+                      /* Disable interrupt.                        */
+        0x0380100c,   /* ori        $t0, $zero,0x4                 */
+        0x04000180,   /* csrxchg    $zero, $t0, LOONGARCH_CSR_CRMD */
+        0x03400000,   /* nop                                       */
 
-    0x0400800c,   /* csrrd      $t0, LOONGARCH_CSR_CPUNUM      */
-    0x034ffd8c,   /* andi       $t0, $t0, 0x3ff                */
-    0x0015000d,   /* move       $t1, $zero                     */
-    0x5800718d,   /* beq        $t0, $t1, 112                  */
+        0x0400800c,   /* csrrd      $t0, LOONGARCH_CSR_CPUNUM      */
+        0x034ffd8c,   /* andi       $t0, $t0, 0x3ff                */
+        0x0015000d,   /* move       $t1, $zero                     */
+        0x5800718d,   /* beq        $t0, $t1, 112                  */
 
-                  /* Clear mailbox.                            */
-    0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
-    0x038081ad,   /* ori        $t1, $t1, CORE_BUF_20  */
-    0x06481da0,   /* iocsrwr.d  $zero, $t1                     */
+                      /* Clear mailbox.                            */
+        0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
+        0x038081ad,   /* ori        $t1, $t1, CORE_BUF_20  */
+        la64 ? 0x06481da0 : 0x064819a0, /* iocsrwr.{d,w} $zero, $t1 */
 
-                  /* Enable IPI interrupt.                     */
-    0x1400002c,   /* lu12i.w    $t0, 1(0x1)                    */
-    0x0400118c,   /* csrxchg    $t0, $t0, LOONGARCH_CSR_ECFG   */
-    0x02fffc0c,   /* addi.d     $t0, $r0,-1(0xfff)             */
-    0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
-    0x038011ad,   /* ori        $t1, $t1, CORE_EN_OFF          */
-    0x064819ac,   /* iocsrwr.w  $t0, $t1                       */
-    0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
-    0x038081ad,   /* ori        $t1, $t1, CORE_BUF_20          */
+                      /* Enable IPI interrupt.                     */
+        0x1400002c,   /* lu12i.w    $t0, 1(0x1)                    */
+        0x0400118c,   /* csrxchg    $t0, $t0, LOONGARCH_CSR_ECFG   */
+        la64 ? 0x02fffc0c : 0x02bffc0c, /* addi.{d,w} $t0, $zero, -1 */
+        0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
+        0x038011ad,   /* ori        $t1, $t1, CORE_EN_OFF          */
+        0x064819ac,   /* iocsrwr.w  $t0, $t1                       */
+        0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
+        0x038081ad,   /* ori        $t1, $t1, CORE_BUF_20          */
 
-                  /* Wait for wakeup  <.L11>:                  */
-    0x06488000,   /* idle       0x0                            */
-    0x03400000,   /* andi       $zero, $zero, 0x0              */
-    0x064809ac,   /* iocsrrd.w  $t0, $t1                       */
-    0x43fff59f,   /* beqz       $t0, -12(0x7ffff4) # 48 <.L11> */
+                      /* Wait for wakeup  <.L11>:                  */
+        0x06488000,   /* idle       0x0                            */
+        0x03400000,   /* andi       $zero, $zero, 0x0              */
+        0x064809ac,   /* iocsrrd.w  $t0, $t1                       */
+        0x43fff59f,   /* beqz       $t0, -12(0x7ffff4) # 48 <.L11> */
 
-                  /* Read and clear IPI interrupt.             */
-    0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
-    0x064809ac,   /* iocsrrd.w  $t0, $t1                       */
-    0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
-    0x038031ad,   /* ori        $t1, $t1, CORE_CLEAR_OFF       */
-    0x064819ac,   /* iocsrwr.w  $t0, $t1                       */
+                      /* Read and clear IPI interrupt.             */
+        0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
+        0x064809ac,   /* iocsrrd.w  $t0, $t1                       */
+        0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
+        0x038031ad,   /* ori        $t1, $t1, CORE_CLEAR_OFF       */
+        0x064819ac,   /* iocsrwr.w  $t0, $t1                       */
 
-                  /* Disable  IPI interrupt.                   */
-    0x1400002c,   /* lu12i.w    $t0, 1(0x1)                    */
-    0x04001180,   /* csrxchg    $zero, $t0, LOONGARCH_CSR_ECFG */
+                      /* Disable  IPI interrupt.                   */
+        0x1400002c,   /* lu12i.w    $t0, 1(0x1)                    */
+        0x04001180,   /* csrxchg    $zero, $t0, LOONGARCH_CSR_ECFG */
 
-                  /* Read mail buf and jump to specified entry */
-    0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
-    0x038081ad,   /* ori        $t1, $t1, CORE_BUF_20          */
-    0x06480dac,   /* iocsrrd.d  $t0, $t1                       */
-    0x00150181,   /* move       $ra, $t0                       */
-    0x4c000020,   /* jirl       $zero, $ra,0                   */
-                  /* BSP Core                                  */
-    0x03400000,   /* nop                                       */
-    0x1800000d,   /* pcaddi     $t1, 0                         */
-    0x28c0a1a4,   /* ld.d       $a0, $t1, 40                   */
-    0x1800000d,   /* pcaddi     $t1, 0                         */
-    0x28c0a1a5,   /* ld.d       $a1, $t1, 40                   */
-    0x1800000d,   /* pcaddi     $t1, 0                         */
-    0x28c0a1a6,   /* ld.d       $a2, $t1, 40                   */
-    0x1800000d,   /* pcaddi     $t1, 0                         */
-    0x28c0a1ac,   /* ld.d       $t0, $t1, 40                   */
-    0x00150181,   /* move       $ra, $t0                       */
-    0x4c000020,   /* jirl       $zero, $ra,0                   */
-    0x00000000,   /* .dword 0   A0                             */
-    0x00000000,
-    0x00000000,   /* .dword 0   A1                             */
-    0x00000000,
-    0x00000000,   /* .dword 0   A2                             */
-    0x00000000,
-    0x00000000,   /* .dword 0   PC                             */
-    0x00000000,
-};
+                      /* Read mail buf and jump to specified entry */
+        0x1400002d,   /* lu12i.w    $t1, 1(0x1)                    */
+        0x038081ad,   /* ori        $t1, $t1, CORE_BUF_20          */
+        la64 ? 0x06480dac : 0x064809ac, /* iocsrrd.{d,w} $t0, $t1 */
+        0x00150181,   /* move       $ra, $t0                       */
+        0x4c000020,   /* jirl       $zero, $ra,0                   */
+                      /* BSP Core                                  */
+        0x03400000,   /* nop                                       */
+        0x1800000d,   /* pcaddi     $t1, 0                         */
+        load_arg | 4, /* ld.{d,w} $a0, $t1, 40 */
+        0x1800000d,   /* pcaddi     $t1, 0                         */
+        load_arg | 5, /* ld.{d,w} $a1, $t1, 40 */
+        0x1800000d,   /* pcaddi     $t1, 0                         */
+        load_arg | 6, /* ld.{d,w} $a2, $t1, 40 */
+        0x1800000d,   /* pcaddi     $t1, 0                         */
+        load_arg | 12, /* ld.{d,w} $t0, $t1, 40 */
+        0x00150181,   /* move       $ra, $t0                       */
+        0x4c000020,   /* jirl       $zero, $ra,0                   */
+    };
+    uint32_t *insn = buf;
+    uint64_t args[] = {
+        cpu_to_le64(info->a0), cpu_to_le64(info->a1),
+        cpu_to_le64(info->a2), cpu_to_le64(kernel_addr),
+    };
+
+    for (size_t i = 0; i < ARRAY_SIZE(code); i++) {
+        insn[i] = cpu_to_le32(code[i]);
+    }
+    /* The LA32 loads read the low word of each little-endian slot. */
+    memcpy(insn + ARRAY_SIZE(code), args, sizeof(args));
+}
 
 static inline void *guidcpy(void *dst, const void *src)
 {
@@ -402,7 +412,7 @@ static void loongarch_direct_kernel_boot(MachineState *ms,
 {
     void *p, *bp;
     int64_t kernel_addr = VIRT_FLASH0_BASE;
-    uint64_t *data;
+    bool la64 = is_la64(&LOONGARCH_CPU(first_cpu)->env);
 
     if (info->kernel_filename) {
         kernel_addr = load_kernel_info(info, phys_addr_mask);
@@ -418,14 +428,9 @@ static void loongarch_direct_kernel_boot(MachineState *ms,
     init_boot_rom(ms, info, p);
     rom_add_blob_fixed_as("boot_info", bp, 1 * MiB, 0, &address_space_memory);
 
-    /* Load slave boot code at pflash0 . */
+    /* Install the primary and secondary CPU boot code at pflash0. */
     void *boot_code = g_malloc0(VIRT_FLASH0_SIZE);
-    memcpy(boot_code, &aux_boot_code, sizeof(aux_boot_code));
-    data = (uint64_t *)(boot_code + sizeof(aux_boot_code));
-    *(data - 4) = cpu_to_le64(info->a0);
-    *(data - 3) = cpu_to_le64(info->a1);
-    *(data - 2) = cpu_to_le64(info->a2);
-    *(data - 1) = cpu_to_le64(kernel_addr);
+    init_aux_boot_code(boot_code, la64, info, kernel_addr);
     rom_add_blob_fixed("boot_code", boot_code, VIRT_FLASH0_SIZE, VIRT_FLASH0_BASE);
 
     g_free(boot_code);
