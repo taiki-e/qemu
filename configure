@@ -1735,6 +1735,9 @@ echo "EXESUF=$EXESUF" >> $config_host_mak
 if test -n "$container_registry"; then
   echo "DOCKER_DEFAULT_REGISTRY=$container_registry" >> $config_host_mak
 fi
+if test "$static" = "yes"; then
+  echo "CONFIG_STATIC=y" >> $config_host_mak
+fi
 if test "$default_targets" = "yes"; then
   echo "CONFIG_DEFAULT_TARGETS=y" >> $config_host_mak
 fi
