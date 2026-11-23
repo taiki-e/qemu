@@ -8,7 +8,7 @@
 #ifndef ARM_CPU_PARAM_H
 #define ARM_CPU_PARAM_H
 
-#ifdef TARGET_AARCH64
+#if defined(TARGET_AARCH64) && !defined(TARGET_ABI32)
 # define TARGET_VIRT_ADDR_SPACE_BITS  52
 #else
 # define TARGET_VIRT_ADDR_SPACE_BITS  32

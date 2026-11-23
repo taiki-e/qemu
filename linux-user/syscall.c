@@ -7357,7 +7357,7 @@ static inline abi_long copy_to_user_flock(abi_ulong target_flock_addr,
 typedef abi_long from_flock64_fn(struct flock *fl, abi_ulong target_addr);
 typedef abi_long to_flock64_fn(abi_ulong target_addr, const struct flock *fl);
 
-#if defined(TARGET_ARM) && TARGET_ABI_BITS == 32
+#if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
 struct target_oabi_flock64 {
     abi_short l_type;
     abi_short l_whence;
@@ -8054,7 +8054,7 @@ static inline abi_long host_to_target_stat64(CPUArchState *cpu_env,
                                              abi_ulong target_addr,
                                              struct stat *host_st)
 {
-#if defined(TARGET_ARM) && defined(TARGET_ABI32)
+#if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
     if (cpu_env->eabi) {
         struct target_eabi_stat64 *target_st;
 
@@ -13194,7 +13194,7 @@ static abi_long do_syscall1(CPUArchState *cpu_env, int num, abi_long arg1,
         from_flock64_fn *copyfrom = copy_from_user_flock64;
         to_flock64_fn *copyto = copy_to_user_flock64;
 
-#ifdef TARGET_ARM
+#if defined(TARGET_ARM) && !defined(TARGET_AARCH64)
         if (!cpu_env->eabi) {
             copyfrom = copy_from_user_oabi_flock64;
             copyto = copy_to_user_oabi_flock64;

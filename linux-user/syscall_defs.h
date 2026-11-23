@@ -60,7 +60,7 @@
 #define TARGET_IOC_TYPEBITS     8
 
 #if (defined(TARGET_I386) && defined(TARGET_ABI32))                     \
-    || (defined(TARGET_ARM) && defined(TARGET_ABI32))                   \
+    || (defined(TARGET_ARM) && !defined(TARGET_AARCH64))                \
     || (defined(TARGET_SPARC) && defined(TARGET_ABI32))                 \
     || defined(TARGET_M68K) || defined(TARGET_SH4)
 /* 16 bit uid wrappers emulation */
@@ -1236,7 +1236,7 @@ struct target_winsize {
 #include "target_mman.h"
 
 #if (defined(TARGET_I386) && defined(TARGET_ABI32))     \
-    || (defined(TARGET_ARM) && defined(TARGET_ABI32))
+    || (defined(TARGET_ARM) && !defined(TARGET_AARCH64))
 #define TARGET_STAT_HAVE_NSEC
 struct target_stat {
     abi_ushort st_dev;
@@ -1907,7 +1907,7 @@ struct target_stat {
     abi_long       st_blocks;
     abi_ulong  __unused[3];
 };
-#elif defined(TARGET_AARCH64)
+#elif defined(TARGET_AARCH64) && !defined(TARGET_ABI32)
 #define TARGET_STAT_HAVE_NSEC
 struct target_stat {
     abi_ulong  st_dev;
@@ -1930,6 +1930,65 @@ struct target_stat {
     abi_ulong  target_st_ctime_nsec;
     abi_uint __unused[2];
 };
+#elif defined(TARGET_AARCH64) && defined(TARGET_ABI32)
+#define TARGET_STAT_HAVE_NSEC
+struct target_stat {
+    abi_ulong  st_dev;
+    abi_ulong  __ilp32_pad1;
+    abi_ulong  st_ino;
+    abi_ulong  __ilp32_pad2;
+    abi_uint   st_mode;
+    abi_uint   st_nlink;
+    abi_uint   st_uid;
+    abi_uint   st_gid;
+    abi_ulong  st_rdev;
+    abi_ulong  __ilp32_pad3;
+    abi_ulong  _pad1;
+    abi_ulong  __ilp32_pad4;
+    abi_long  st_size;
+    abi_ulong  __ilp32_pad5;
+    abi_int    st_blksize;
+    abi_int    __pad2;
+    abi_long   st_blocks;
+    abi_ulong __ilp32_pad6;
+    abi_long  target_st_atime;
+    abi_ulong  target_st_atime_nsec;
+    abi_long  target_st_mtime;
+    abi_ulong  target_st_mtime_nsec;
+    abi_long  target_st_ctime;
+    abi_ulong  target_st_ctime_nsec;
+    abi_uint __unused[2];
+};
+
+#define TARGET_HAS_STRUCT_STAT64
+struct target_stat64 {
+    abi_ulong  st_dev;
+    abi_ulong  __ilp32_pad1;
+#define TARGET_STAT64_HAS_BROKEN_ST_INO 1
+    abi_ulong  __st_ino;
+    abi_ulong  __ilp32_pad2;
+    abi_uint   st_mode;
+    abi_uint   st_nlink;
+    abi_uint   st_uid;
+    abi_uint   st_gid;
+    abi_ulong  st_rdev;
+    abi_ulong  __ilp32_pad3;
+    abi_ulong  __pad1;
+    abi_ulong  __ilp32_pad4;
+    abi_llong  st_size;
+    abi_int    st_blksize;
+    abi_int    _pad2;
+    abi_long   st_blocks;
+    abi_ulong  __ilp32_pad5;
+    abi_long   target_st_atime;
+    abi_ulong  target_st_atime_nsec;
+    abi_long   target_st_mtime;
+    abi_ulong  target_st_mtime_nsec;
+    abi_long   target_st_ctime;
+    abi_ulong  target_st_ctime_nsec;
+    abi_ullong st_ino;
+} QEMU_PACKED;
+
 #elif defined(TARGET_XTENSA)
 #define TARGET_STAT_HAVE_NSEC
 struct target_stat {
@@ -2800,7 +2859,7 @@ struct target_mount_attr_ver0 {
 #define TARGET_MLOCK_ONFAULT    0x01
 
 #if (defined(TARGET_I386) && defined(TARGET_ABI32)) || \
-    (defined(TARGET_ARM) && defined(TARGET_ABI32)) || \
+    (defined(TARGET_ARM) && !defined(TARGET_AARCH64)) || \
     defined(TARGET_M68K) || defined(TARGET_MICROBLAZE) || \
     defined(TARGET_S390X)
 #define TARGET_ARCH_WANT_SYS_OLD_MMAP

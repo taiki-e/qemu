@@ -265,7 +265,7 @@
 221	common	execve				sys_execve			compat_sys_execve
 222	32	mmap2				sys_mmap2
 222	64	mmap				sys_mmap
-223	32	fadvise64_64			sys_fadvise64_64		compat_sys_fadvise64_64
+223	32	arm_fadvise64_64		sys_arm_fadvise64_64
 223	64	fadvise64			sys_fadvise64_64
 224	common	swapon				sys_swapon
 225	common	swapoff				sys_swapoff
