@@ -7,6 +7,7 @@
 
 #include "csr.h"
 
+#ifndef CONFIG_USER_ONLY
 static bool check_plv(DisasContext *ctx)
 {
     if (ctx->plv == MMU_PLV_USER) {
@@ -15,17 +16,24 @@ static bool check_plv(DisasContext *ctx)
     }
     return false;
 }
+#endif
 
 static bool trans_dbcl(DisasContext *ctx, arg_dbcl *a)
 {
-    if (semihosting_enabled(ctx->plv == MMU_PLV_USER) && a->imm == 0xab) {
-        generate_exception(ctx, EXCCODE_SEMIHOST);
-        return true;
-    }
-    if (check_plv(ctx)) {
+#ifdef CONFIG_USER_ONLY
+    if (a->imm != 0xab) {
         return false;
     }
-    generate_exception(ctx, EXCCODE_DBP);
+#else
+    if (a->imm != 0xab || !semihosting_enabled(ctx->plv != MMU_PLV_KERNEL)) {
+        if (check_plv(ctx)) {
+            return false;
+        }
+        generate_exception(ctx, EXCCODE_DBP);
+        return true;
+    }
+#endif
+    generate_exception(ctx, EXCCODE_SEMIHOST);
     return true;
 }
 

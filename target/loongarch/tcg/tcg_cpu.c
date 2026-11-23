@@ -58,6 +58,7 @@ static void loongarch_cpu_do_interrupt(CPUState *cs)
     case EXCCODE_SEMIHOST:
         do_common_semihosting(cs);
         set_pc(env, env->pc + 4);
+        qemu_plugin_vcpu_hostcall_cb(cs, last_pc);
         return;
     case EXCCODE_DBP:
         sys->CSR_DBG = FIELD_DP64(sys->CSR_DBG, CSR_DBG, DCL, 1);
