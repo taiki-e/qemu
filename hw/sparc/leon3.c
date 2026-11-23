@@ -106,7 +106,7 @@ static uint32_t *gen_store_u32(uint32_t *code, hwaddr addr, uint32_t val)
  * initialization, it allows to use the same reset address for all the
  * cpus.
  */
-static void write_bootloader(void *ptr, hwaddr kernel_addr)
+static void write_bootloader(void *ptr, hwaddr kernel_addr, hwaddr ram_end)
 {
     uint32_t *p = ptr;
     uint32_t *sec_cpu_branch_p = NULL;
@@ -132,6 +132,14 @@ static void write_bootloader(void *ptr, hwaddr kernel_addr)
     p = gen_store_u32(p, 0x80000314, 0xFFFFFFFE);
     /* *GPTIMER0_CONFIG = GPTIMER_ENABLE | GPTIMER_RESTART;        */
     p = gen_store_u32(p, 0x80000318, 3);
+
+    /*
+     * Like GRMON, pass the end of RAM to the application in %sp:
+     *   sethi %hi(ram_end), %sp
+     *   or %sp, %lo(ram_end), %sp
+     */
+    stl_be_p(p++, 0x1d000000 | extract32(ram_end, 10, 22));
+    stl_be_p(p++, 0x9c13a000 | extract32(ram_end, 0, 10));
 
     /* Now, the relative branch above can be computed.  */
     stl_be_p(sec_cpu_branch_p, 0x12800000
@@ -396,7 +404,8 @@ static void leon3_generic_hw_init(MachineState *machine)
              * the machine in an initialized state through a little
              * bootloader.
              */
-            write_bootloader(memory_region_get_ram_ptr(prom), entry);
+            write_bootloader(memory_region_get_ram_ptr(prom), entry,
+                             LEON3_RAM_OFFSET + ram_size);
             reset_info->entry = LEON3_PROM_OFFSET;
             for (i = 0; i < machine->smp.cpus; i++) {
                 reset_info->info[i].cpu->env.pc = LEON3_PROM_OFFSET;
