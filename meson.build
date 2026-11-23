@@ -1761,7 +1761,7 @@ if get_option('oss').allowed() and have_system
   endif
 endif
 dsound = not_found
-if not get_option('dsound').auto() or (host_os == 'windows' and have_system)
+if get_option('dsound').disable_auto_if(host_os != 'windows' or not have_system).allowed()
   if cc.has_header('dsound.h')
     dsound = declare_dependency(link_args: ['-lole32', '-ldxguid'])
   endif
