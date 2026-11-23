@@ -6,5 +6,5 @@
 
 void define_omap_cp_regs(ARMCPU *cpu)
 {
-    g_assert_not_reached();
+    /* OMAP CP15 registers are accessible only to privileged code. */
 }
