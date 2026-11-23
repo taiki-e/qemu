@@ -1881,6 +1881,9 @@ static void do_coproc_insn(DisasContext *s, int cpnum, int is64,
         break;
     case ARM_CP_NOP:
         return;
+    case ARM_CP_BARRIER:
+        tcg_gen_mb(TCG_MO_ALL | TCG_BAR_SC);
+        return;
     case ARM_CP_WFI:
         if (isread) {
             unallocated_encoding(s);
