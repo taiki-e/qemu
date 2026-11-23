@@ -1,0 +1,234 @@
+name: Release
+
+# To release:
+#
+# tag=
+# git tag -f "${tag:?}"
+# git push origin -f refs/heads/"${tag:?}"
+# git push origin -f refs/tags/"${tag:?}"
+
+permissions: {}
+
+on:
+  push:
+    tags:
+      - patched-[0-9]+.[0-9]+.[0-9]+
+      - patched-[0-9]+.[0-9]+.[0-9]+-rc[0-9]+
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -CeEuxo pipefail {0}
+
+jobs:
+  release:
+    if: github.repository_owner == 'taiki-e'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - uses: taiki-e/create-gh-release-action@v1
+        with:
+          prefix: patched
+          draft: true
+
+  upload-system:
+    if: github.repository_owner == 'taiki-e'
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: x86_64-linux
+          - os: ubuntu-24.04-arm
+            name: aarch64-linux
+          - os: macos-latest
+            name: aarch64-macos
+          - os: windows-2025
+            name: x86_64-windows
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    env:
+      ARCHIVE: qemu-system-${{ matrix.name }}.tar.zst
+    steps:
+      - name: Use LF line endings on Windows
+        run: git config --global core.autocrlf input
+        if: runner.os == 'Windows'
+      - uses: taiki-e/checkout-action@v1
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get -o Acquire::Retries=10 -qq update
+          sudo apt-get -o Acquire::Retries=10 -o Dpkg::Use-Pty=0 install -y --no-install-recommends \
+            bison \
+            build-essential \
+            bzip2 \
+            flex \
+            libglib2.0-dev \
+            libpixman-1-dev \
+            libslirp-dev \
+            ninja-build \
+            pkg-config \
+            python3-pip \
+            python3-setuptools \
+            python3-venv \
+            python3-wheel \
+            zlib1g-dev
+        if: runner.os == 'Linux'
+      - name: Install macOS build dependencies
+        env:
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: |
+          brew install bison flex glib libslirp ninja pixman pkgconf python@3.13
+          printf '%s\n' \
+            "$(brew --prefix bison)/bin" \
+            "$(brew --prefix flex)/bin" \
+            "$(brew --prefix python@3.13)/libexec/bin" >> "${GITHUB_PATH}"
+        if: runner.os == 'macOS'
+      - name: Install Windows build dependencies
+        run: |
+          # Start a fresh process after a possible core update.
+          C:/msys64/usr/bin/pacman -Syu --noconfirm
+          C:/msys64/usr/bin/pacman -Syu --noconfirm
+          # https://github.com/msys2/MINGW-packages/blob/master/mingw-w64-qemu/PKGBUILD
+          ucrt_packages=(
+            mingw-w64-ucrt-x86_64-binutils
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-glib2
+            mingw-w64-ucrt-x86_64-libslirp
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pixman
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-python-setuptools
+            mingw-w64-ucrt-x86_64-python-wheel
+            mingw-w64-ucrt-x86_64-zlib
+          )
+          C:/msys64/usr/bin/pacman -S --needed --noconfirm bison bzip2 diffutils flex git zstd "${ucrt_packages[@]}"
+        if: runner.os == 'Windows'
+      - name: Build and package system emulators
+        run: bash .github/scripts/build-qemu-system.sh
+        if: runner.os != 'Windows'
+      - name: Build and package system emulators
+        shell: pwsh
+        env:
+          CHERE_INVOKING: '1'
+          MSYS: winsymlinks:native
+          MSYS2_PATH_TYPE: minimal
+          MSYSTEM: UCRT64
+        run: C:/msys64/usr/bin/bash.exe --login .github/scripts/build-qemu-system.sh
+        if: runner.os == 'Windows'
+      - name: Upload release asset
+        run: |
+          retry() {
+            for i in {1..10}; do
+              if "$@"; then
+                return 0
+              else
+                sleep "${i}"
+              fi
+            done
+            "$@"
+          }
+          retry gh release upload "${GITHUB_REF_NAME}" "${ARCHIVE}" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload-user:
+    if: github.repository_owner == 'taiki-e'
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: x86_64-linux
+          - os: ubuntu-24.04-arm
+            name: aarch64-linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    env:
+      ARCHIVE: qemu-user-${{ matrix.name }}.tar.zst
+    steps:
+      - uses: taiki-e/checkout-action@v1
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get -o Acquire::Retries=10 -qq update
+          sudo apt-get -o Acquire::Retries=10 -o Dpkg::Use-Pty=0 install -y --no-install-recommends \
+            bison \
+            build-essential \
+            flex \
+            libglib2.0-dev \
+            ninja-build \
+            pkg-config \
+            python3-pip \
+            python3-setuptools \
+            python3-venv \
+            python3-wheel \
+            zlib1g-dev
+      - name: Build and package Linux user emulators
+        run: |
+          targets=()
+          binaries=()
+          for config in configs/targets/*-linux-user.mak; do
+            target=${config##*/}
+            targets+=("${target%.mak}")
+            binaries+=("qemu-${target%-linux-user.mak}")
+          done
+
+          mkdir build-user
+          cd build-user
+          # Refs: https://salsa.debian.org/qemu-team/qemu/-/blob/master/debian/rules
+          ../configure \
+            --without-default-features \
+            --enable-linux-user \
+            --enable-tcg \
+            --enable-attr \
+            --static \
+            --enable-pie \
+            --disable-system \
+            --disable-bsd-user \
+            --disable-capstone \
+            --disable-plugins \
+            --disable-tools \
+            --disable-guest-agent \
+            --disable-docs \
+            --disable-containers \
+            --disable-debug-info \
+            --disable-qom-cast-debug \
+            --disable-werror \
+            --target-list="${targets[*]}"
+          ninja -j "$(nproc)" "${binaries[@]}"
+
+          install -D -m 0755 -s -t qemu-user/bin "${binaries[@]}"
+          install -D -m 0644 -t qemu-user/share/doc/qemu ../COPYING* ../LICENSE*
+          for binary in qemu-user/bin/qemu-*; do
+            headers=$(LC_ALL=C readelf -lWd "${binary}")
+            if grep -qE '^[[:space:]]+INTERP[[:space:]]|\(NEEDED\)' <<<"${headers}"; then
+              echo "${binary} is dynamically linked" >&2
+              exit 1
+            fi
+            "${binary}" --version
+          done
+          tar -I 'zstd --ultra -22 -T0' -cf "../${ARCHIVE}" qemu-user
+      - name: Upload release asset
+        run: |
+          retry() {
+            for i in {1..10}; do
+              if "$@"; then
+                return 0
+              else
+                sleep "${i}"
+              fi
+            done
+            "$@"
+          }
+          retry gh release upload "${GITHUB_REF_NAME}" "${ARCHIVE}" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
